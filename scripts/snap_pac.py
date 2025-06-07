@@ -24,6 +24,8 @@ from pathlib import Path
 import os
 import sys
 import tempfile
+import subprocess
+import time
 
 
 logging.basicConfig(format="%(message)s", level=logging.INFO)
@@ -204,15 +206,17 @@ if __name__ == "__main__":
 
             # Solve the problem that pacman cannot run normally after rollback due to the pacman lock file in the snapshot.
             try:
-                # Set the snapshot to read-write mode
-                os.system(f"snapper --config {snapper_config} modify --read-write {num}")
+                time.sleep(0.2)
+                subprocess.run(["btrfs", "property", "set", "-ts", f"/.snapshots/{num}/snapshot", "ro", "false"], check=True)
 
-                # Delete the specified file
-                file_path = f"/.snapshots/{num}/snapshot/var/lib/pacman/db.lck"
-                os.system(f"rm -f {file_path}")
+                lock_file = Path(f"/.snapshots/{num}/snapshot/var/lib/pacman/db.lck")
+                lock_file.unlink() 
 
-                # Restore the snapshot to read-only mode
-                os.system(f"snapper --config {snapper_config} modify --read-only {num}")
+                subprocess.run(["btrfs", "property", "set", "-ts", f"/.snapshots/{num}/snapshot", "ro", "true"], check=True)
+
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Failed to modify snapshot properties: {e}")
             except Exception as e:
-                logging.error(f"Error modifying snapshot {num}: {e}")
+                logging.error(f"Error deleting db.lck: {e}")
+
 
