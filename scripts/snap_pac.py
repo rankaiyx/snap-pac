@@ -201,3 +201,18 @@ if __name__ == "__main__":
                              data["description"], chroot, pre_number, data["userdata"])()
             logging.info(f"==> {snapper_config}: {num}")
             prefile.write(num)
+
+            # Solve the problem that pacman cannot run normally after rollback due to the pacman lock file in the snapshot.
+            try:
+                # Set the snapshot to read-write mode
+                os.system(f"snapper --config {snapper_config} modify --read-write {num}")
+
+                # Delete the specified file
+                file_path = f"/.snapshots/{num}/snapshot/var/lib/pacman/db.lck"
+                os.system(f"rm -f {file_path}")
+
+                # Restore the snapshot to read-only mode
+                os.system(f"snapper --config {snapper_config} modify --read-only {num}")
+            except Exception as e:
+                logging.error(f"Error modifying snapshot {num}: {e}")
+
