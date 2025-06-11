@@ -25,7 +25,6 @@ import os
 import sys
 import tempfile
 import subprocess
-import time
 
 
 logging.basicConfig(format="%(message)s", level=logging.INFO)
@@ -197,26 +196,14 @@ if __name__ == "__main__":
 
         data = config_processor(snapper_config)
         if data["snapshot"]:
+            if os.path.isfile("/var/lib/pacman/db.lck"):
+                subprocess.run("mkdir -p /tmp/snap-pac", shell=True, check=True)
+                subprocess.run("mv /var/lib/pacman/db.lck /tmp/snap-pac/ && sync", shell=True, check=True)
             prefile = Prefile(snapper_config, args.type)
             pre_number = prefile.read()
             num = SnapperCmd(snapper_config, args.type, data["cleanup_algorithm"],
                              data["description"], chroot, pre_number, data["userdata"])()
             logging.info(f"==> {snapper_config}: {num}")
             prefile.write(num)
-
-            # Solve the problem that pacman cannot run normally after rollback due to the pacman lock file in the snapshot.
-            try:
-                time.sleep(0.2)
-                subprocess.run(["btrfs", "property", "set", "-ts", f"/.snapshots/{num}/snapshot", "ro", "false"], check=True)
-
-                lock_file = Path(f"/.snapshots/{num}/snapshot/var/lib/pacman/db.lck")
-                lock_file.unlink() 
-
-                subprocess.run(["btrfs", "property", "set", "-ts", f"/.snapshots/{num}/snapshot", "ro", "true"], check=True)
-
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to modify snapshot properties: {e}")
-            except Exception as e:
-                logging.error(f"Error deleting db.lck: {e}")
-
-
+            if os.path.isfile("/tmp/snap-pac/db.lck"):
+                subprocess.run("mv /tmp/snap-pac/db.lck /var/lib/pacman/ && sync", shell=True, check=True)
